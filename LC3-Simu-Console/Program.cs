@@ -62,7 +62,7 @@ public class LC_3
 
     public static void Main(string[] args)
     {
-        Console.CursorVisible = false;
+        //Console.CursorVisible = false;
         Console.CancelKeyPress += (sender, e) =>
         {
             Console.WriteLine();
@@ -103,10 +103,7 @@ public class LC_3
             ushort pc_offset = 0;
 
             //Thread.Sleep(125);
-            var dbg_thing = $"#R1 #R2 #R3 #R4 #R5 #R6 #R7 #R8 #R9";
-
-            for (int i = 0; i < 10; i++) dbg_thing = dbg_thing.Replace($"#R{i}", $"{(Register)i} {reg[i].ToString("X")}");
-            Console.Title = dbg_thing;
+            doDebugPrint();
 
             switch (op)
             {
@@ -121,7 +118,7 @@ public class LC_3
                     }
                     else
                     {
-                        ushort r2 = getRegister(instr);
+                        ushort r2 = getRegister(instr, 0);
                         reg[r0] = (ushort)(reg[r1] + reg[r2]);
                     }
                     update_flags(r0);
@@ -331,39 +328,31 @@ public class LC_3
         }
 
 
-       bool read_image(string path)
+        bool read_image(string path)
         {
-            Console.WriteLine("Read image...");
             try
             {
                 using (var fs = new FileStream(path, FileMode.Open))
                 {
                     var br = new BinaryReader(fs);
-                    ushort origin = br.ReadUInt16();
-                    Console.WriteLine("Origin: " + origin);
-                    origin = swap16(origin);
-                    ushort max_read = (ushort)(MEM_MAX - origin);
-                    Console.WriteLine("Max read: " + max_read);
-                    int size = (int)(fs.Length / 2);
-                    Console.WriteLine("Size: " + size);
+                    // 1. Lê a origem (primeiros 2 bytes)
+                    ushort origin = swap16(br.ReadUInt16());
 
-                    int count = Math.Min(size, origin + max_read);
-
-                    //Console.WriteLine("Loop begin");
-                    for (int i = origin; i != count; i++)
+                    // 2. Lê o resto do arquivo
+                    while (fs.Position < (fs.Length / 2))
                     {
-                      //  Console.WriteLine("Loop body");
-                        mem[i] = swap16(br.ReadUInt16());
-                        //Console.WriteLine("Read: " + mem[i]);
+                        mem[origin++] = swap16(br.ReadUInt16());
                     }
-                    //Console.WriteLine("Loop end");
                 }
-            }
-            catch (Exception e)
-            {
-                //Console.WriteLine("Erro: " + e.Message); 
-            }
                 return true;
+            }
+            catch {
+#if DEBUG
+                throw;
+#else
+                return false;
+#endif
+            }
         }
 
 
@@ -399,6 +388,48 @@ public class LC_3
         void mem_write(ushort addr, ushort value)
         {
             mem[addr] = value;
+        }
+    }
+
+    private static void doDebugPrint()
+    {
+
+        Console.SetCursorPosition(0, 0);
+        Console.WriteLine("Registers");
+        for(int i = 0; i < reg.Length / 2; i++)
+        {
+            Console.Write($"{(Register)i}: ");
+            Console.Write(reg[i].ToString("X4"));
+            Console.Write("\t");
+
+            if (((Register)(i + 5)) == Register.R_COND)
+            {
+                Console.Write("Flags: ");
+                switch (reg[(int)Register.R_COND])
+                {
+                    case (ushort)Flags.FL_ZRO:
+                        Console.Write("Zero");
+                        break;
+                    case (ushort)Flags.FL_NEG:
+                        Console.Write("Negative");
+                        break;
+                    case (ushort)Flags.FL_POS:
+                        Console.Write("Positive");
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                Console.Write($"{(Register)(i + reg.Length / 2)}: ");
+                Console.Write(reg[i + reg.Length / 2].ToString("X4"));
+                Console.Write("\n");
+            }
+            if (i == (reg.Length / 2) - 1)
+            {
+                Console.Write("\n");
+            }
         }
     }
 }

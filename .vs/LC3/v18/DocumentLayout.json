@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\nyahstic\\Source\\repos\\Little-Computer3\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}|LC3.Emulation.Core\\LC3.Emulation.Core.csproj|c:\\users\\nyahstic\\source\\repos\\little-computer3\\lc3.emulation.core\\processor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}|LC3.Emulation.Core\\LC3.Emulation.Core.csproj|solutionrelative:lc3.emulation.core\\processor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Processor.cs",
+              "DocumentMoniker": "C:\\Users\\nyahstic\\Source\\repos\\Little-Computer3\\LC3.Emulation.Core\\Processor.cs",
+              "RelativeDocumentMoniker": "LC3.Emulation.Core\\Processor.cs",
+              "ToolTip": "C:\\Users\\nyahstic\\Source\\repos\\Little-Computer3\\LC3.Emulation.Core\\Processor.cs",
+              "RelativeToolTip": "LC3.Emulation.Core\\Processor.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-22T23:25:44.708Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

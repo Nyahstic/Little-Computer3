@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "LC3 Hello World": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\nyahstic\\Documents\\LittleComputer-3\\Hello.obj\""
+    }
+  }
+}
