@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.4.11519.219 insiders
+VisualStudioVersion = 18.4.11519.219
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LC3.Emulation.Core", "LC3.Emulation.Core\LC3.Emulation.Core.csproj", "{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LC3.Emulation.TestSystem", "LC3.Emulation.TestSystem\LC3.Emulation.TestSystem.csproj", "{76D2D3AD-4FFD-4393-9A5F-574DB5123425}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6898CE08-FE3F-40D7-8A88-0665CEF42CC7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76D2D3AD-4FFD-4393-9A5F-574DB5123425}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76D2D3AD-4FFD-4393-9A5F-574DB5123425}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76D2D3AD-4FFD-4393-9A5F-574DB5123425}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76D2D3AD-4FFD-4393-9A5F-574DB5123425}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
