@@ -58,7 +58,7 @@ namespace LC3.Emulation.Core
 
             ushort opcode = (ushort)(instruction >> 12);
 
-
+            
         }
     }
 }   
