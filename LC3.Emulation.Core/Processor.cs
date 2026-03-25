@@ -119,7 +119,17 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_AND:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    if (immFlag)
+                    {
+                        RegisterFile[r0] = (ushort)(RegisterFile[r1] & imm5);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with immediate value: {(Register)r0} = {(Register)r1} & {imm5} => 0x{RegisterFile[r0]:X4}");
+                    }
+                    else
+                    {
+                        RegisterFile[r0] = (ushort)(RegisterFile[r1] & RegisterFile[r2]);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with register value: {(Register)r0} = {(Register)r1} & {(Register)r2} => 0x{RegisterFile[r0]:X4}");
+                    }
+                    _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_LDR:
@@ -135,12 +145,14 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_NOT:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[r0] = (ushort)~RegisterFile[r1];
+                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_NOT, on Register {(Register)r0}, with Register {(Register)r1}");
+                    _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_LDI:
-                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)r0}, with offset of {pcoffset9}");
                     RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcoffset9));
+                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)r0}, with offset of {pcoffset9}");
                     _updateFlags(r0);
                     break;
 

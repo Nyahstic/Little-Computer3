@@ -12,7 +12,14 @@ namespace LC3.Emulation.TestSystem
             {
                 try
                 {
+                    /*Console.Write($"R_PC: {proc.RegisterFile[(int)Processor.Register.R_PC]:X4} ");
+                    for(int i = 0; i < proc.RegisterFile.Length; i++)
+                    {
+                        Console.Write($"R{i}: {proc.RegisterFile[i]:X4} ");
+                    }
+                    Console.WriteLine();*/
                     proc.Step();
+                    
                 } catch {
                     continue;
                 }
