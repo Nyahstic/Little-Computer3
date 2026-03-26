@@ -4,21 +4,33 @@ namespace LC3.Emulation.Core
 {
     public class Processor
     {
+        public const int CPU_OUTPUT_CHARACTER = 0;
+        public const int CPU_OUTPUT_STRING = 1;
+        public const int CPU_OUTPUT_HALT = 2;
+
+        public const int CPU_INPUT_CHARACTER = 0;
+
         public Processor(ushort ProgramCouterStart = 0x3000)
         {
             RegisterFile[(int)Register.R_PC] = ProgramCouterStart; // Default starting address for the program counter
-            // for funsies
+            
             for (int i = 0; i < memory.Length; i++)
             {
-                memory[i] = (ushort)Random.Shared.Next(0, ushort.MaxValue); // Fill memory with its own address for testing
+                MemoryWrite((ushort)i, (ushort) Random.Shared.Next(0, ushort.MaxValue));
             }
         }
 
 
         // Event to signal debug information
         public event Action<string>? OnDebugInfo;
+        public event Action<int>? OnCPUOutput;
+        public event Action<int>? OnCPUInput;
+
+        public Stack<char> inputStack = new Stack<char>();
+        public Stack<char> outputStack = new Stack<char>();
 
         public bool Running = false;
+        public bool DoTrapInCSharp = true;
 
         public enum Register{ 
             R_R0 = 0,
@@ -29,13 +41,24 @@ namespace LC3.Emulation.Core
             R_R6,
             R_R7,
             R_PC,
-            R_COND, // R_COND = R_CONDITION
+            R_COND,
             R_COUNT
         };
+
+        public enum TrapCode 
+        {
+            TRAP_GETC = 0x20,  /* get character from keyboard, not echoed onto the terminal */
+            TRAP_OUT = 0x21,   /* output a character */
+            TRAP_PUTS = 0x22,  /* output a word string */
+            TRAP_IN = 0x23,    /* get character from keyboard, echoed onto the terminal */
+            TRAP_PUTSP = 0x24, /* output a byte string */
+            TRAP_HALT = 0x25   /* halt the program */
+        };
+
         private ushort[] memory = new ushort[ushort.MaxValue + 1];
         public ushort[] RegisterFile { get; private set; } = new ushort[(int)Register.R_COUNT];
         
-        public enum OpCode : ushort
+        public enum OpCode 
         {
             OP_BR = 0, /* branch */
             OP_ADD,    /* add  */
@@ -61,9 +84,12 @@ namespace LC3.Emulation.Core
             FL_POS = 1 << 0, /* P */
             FL_ZRO = 1 << 1, /* Z */
             FL_NEG = 1 << 2, /* N */
-        }; 
+        };
 
 
+        ushort r0, r1, r2, imm5, pcOffset9, condFlag, loadRegisterOffset;
+        // HACKHACK: condFlag SHOULD be a bool, but i want to use against a int, so it'll become an ushort
+        bool immFlag, longFlag;
         public void Step()
         {
             RegisterFile[(int)Register.R_COND] = (ushort)Flags.FL_ZRO;
@@ -72,15 +98,17 @@ namespace LC3.Emulation.Core
             ushort instruction = MemoryRead(RegisterFile[(int)Register.R_PC]++);
 
             ushort opcode = (ushort)(instruction >> 12);
-            ushort r0, r1, r2, imm5, pcoffset9;
-            bool immFlag;
+            
 
             r0 = (ushort)((instruction >> 9) & 0x7);
             r1 = (ushort)((instruction >> 6) & 0x7);
             r2 = (ushort)(instruction & 0x7);
-            immFlag = ((instruction >> 5) & 0x1) == 1;
             imm5 = _signExtend((ushort)(instruction & 0x1F), 5);
-            pcoffset9 = _signExtend((ushort)(instruction & 0x1FF), 9);
+            pcOffset9 = _signExtend((ushort)(instruction & 0x1FF), 9);
+            immFlag = ((instruction >> 5) & 0x1) == 1;
+            condFlag = (ushort)((instruction >> 9) & 0x7);
+            longFlag = ((instruction >> 11) & 0x1) == 1;
+            loadRegisterOffset = _signExtend((ushort)(instruction & 0x3F), 6);
 
             //OnDebugInfo?.Invoke($"[DEBUG] Executing instruction at address: 0x{RegisterFile[(int)Register.R_PC]:X4}, Instruction: 0x{memory[RegisterFile[(int)Register.R_PC]]:X4}");
             //OnDebugInfo?.Invoke($"[DEBUG] Decoded instruction - Opcode: {(OpCode)opcode}");
@@ -88,7 +116,11 @@ namespace LC3.Emulation.Core
             switch (opcode)
             {
                 case (ushort)OpCode.OP_BR:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    if ((condFlag & RegisterFile[(int)Register.R_COND]) == 1)
+                    {
+                        RegisterFile[(int)Register.R_PC] += pcOffset9;
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_BR, branching to address: 0x{RegisterFile[(int)Register.R_PC]:X4} with offset {pcOffset9}");
+                    }
                     break;
 
                 case (ushort)OpCode.OP_ADD:
@@ -107,15 +139,28 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_LD:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9));
+                    _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_ST:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    MemoryWrite((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9), RegisterFile[r0]);
                     break;
 
                 case (ushort)OpCode.OP_JSR:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[(int)Register.R_R7] = RegisterFile[(int)Register.R_PC];
+                    if (longFlag)
+                    {
+                        //because longPCOffset is only used here, i will NOT put it at the start of the function
+                        ushort longPCOffset = _signExtend((ushort)(instruction & 0x7FF), 11);
+                        RegisterFile[(int)Register.R_PC] += longPCOffset;
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JSR with long offset: Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} with long offset {longPCOffset}");
+                    }
+                    else // Appently JSRR here
+                    {
+                        RegisterFile[(int)Register.R_PC] = RegisterFile[r1];
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JSR with register value: Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)r1}");
+                    }
                     break;
 
                 case (ushort)OpCode.OP_AND:
@@ -133,11 +178,12 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_LDR:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[r1] + loadRegisterOffset));
+                    _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_STR:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    MemoryWrite(MemoryRead((ushort)(RegisterFile[r1] + loadRegisterOffset)), RegisterFile[r0]);
                     break;
 
                 case (ushort)OpCode.OP_RTI:
@@ -151,17 +197,18 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_LDI:
-                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcoffset9));
-                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)r0}, with offset of {pcoffset9}");
+                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9));
+                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)r0}, with offset of {pcOffset9}");
                     _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_STI:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    MemoryWrite(MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9)), RegisterFile[r0]);
                     break;
 
-                case (ushort)OpCode.OP_JMP:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                case (ushort)OpCode.OP_JMP: // Also RET????
+                    RegisterFile[(int)Register.R_PC] = RegisterFile[r1];
+                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JMP, Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)r1}");
                     break;
 
                 case (ushort)OpCode.OP_RES:
@@ -169,11 +216,13 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_LEA:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[r0] = (ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9);
+                    _updateFlags(r0);
                     break;
 
                 case (ushort)OpCode.OP_TRAP:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
+                    RegisterFile[(int)Register.R_R7] = RegisterFile[(int)Register.R_PC];
+                    _handleTrapCode((TrapCode)(instruction & 0xFF));
                     break;
 
                  default:
@@ -181,9 +230,83 @@ namespace LC3.Emulation.Core
             }
         }
 
-        private ushort MemoryRead(ushort Address)
+        private void _handleTrapCode(TrapCode trapCode)
+        {
+            switch (trapCode)
+            {
+                case TrapCode.TRAP_GETC:
+                    bool alertConsumer = false;
+                    while(inputStack.Count == 0)
+                    {
+                        if (!alertConsumer)
+                        {
+                            OnDebugInfo?.Invoke($"[DEBUG] Waiting for input for TRAP_GETC...");
+                            OnCPUInput?.Invoke(CPU_INPUT_CHARACTER);
+                            alertConsumer = true;
+                        }
+                        // Wait for input
+                    }
+                    RegisterFile[(int)Register.R_R0] = (ushort)inputStack.Pop();
+                    _updateFlags(0);
+                    break;
+                case TrapCode.TRAP_OUT:
+                    OnCPUOutput?.Invoke(CPU_OUTPUT_CHARACTER);
+                    outputStack.Push((char)(RegisterFile[r0]));
+                    break;
+                case TrapCode.TRAP_PUTS:
+                    ushort address = RegisterFile[r0];
+                    while (MemoryRead(address) != 0)
+                    {
+                        char c = (char)(MemoryRead(address) & 0xFF);
+                        outputStack.Push(c);
+                        OnCPUOutput?.Invoke(CPU_OUTPUT_CHARACTER);
+                        address++;
+                    }
+                    break;
+                case TrapCode.TRAP_IN:
+                    alertConsumer = false;
+                    while (inputStack.Count == 0)
+                    {
+                        if (!alertConsumer)
+                        {
+                            OnDebugInfo?.Invoke($"[DEBUG] Waiting for input for TRAP_IN...");
+                            OnCPUInput?.Invoke(CPU_INPUT_CHARACTER);
+                            alertConsumer = true;
+                        }
+                        // Wait for input
+                    }
+                    RegisterFile[(int)Register.R_R0] = (ushort)inputStack.Pop();
+                    _updateFlags(0);
+                    break;
+                case TrapCode.TRAP_PUTSP:
+                    address = RegisterFile[r0];
+                    while(MemoryRead(address) != 0)
+                    {
+                        char c1, c2;
+                        var val = MemoryRead(++address);
+                        c1 = (char)(MemoryRead(address) & 0xFF);
+                        c2 = (char)(MemoryRead(address) >> 8);
+                        outputStack.Push(c1);
+                        outputStack.Push(c2);
+                    }
+                    OnCPUOutput.Invoke(CPU_OUTPUT_STRING);
+                    break;
+                default:
+                case TrapCode.TRAP_HALT:
+                    Running = false;
+                    OnCPUOutput?.Invoke(CPU_OUTPUT_HALT);
+                    break;
+            }
+        }
+
+        public ushort MemoryRead(ushort Address)
         {
             return memory[Address % ushort.MaxValue];
+        }
+
+        public void MemoryWrite(ushort Address, ushort Value)
+        {
+            memory[Address % ushort.MaxValue] = Value;
         }
 
         public bool LoadImage(string path) {
