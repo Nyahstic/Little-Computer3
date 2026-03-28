@@ -7,26 +7,25 @@ namespace LC3.Emulation.TestSystem
     {
         static void Main(string[] args)
         {
-            var proc = new Processor();
+            var proc = new ProcessorUnprotected();
+            proc.LoadImage("C:\\Users\\nyahstic\\Documents\\LittleComputer-3\\AssemblyTest.obj");
             proc.OnDebugInfo += (info) => Console.WriteLine(info);
             while (true)
             {
                 try
                 {
-                    Console.Write($"R_PC: {proc.RegisterFile[(int)Processor.Register.R_PC]:X4} ");
-                    for (int i = 0; i < proc.RegisterFile.Length; i++)
-                    {
-                        Console.Write($"R{i}: {proc.RegisterFile[i]:X4} ");
-                    }
-                    Console.WriteLine();
+                    Console.Title = $"LC3 Emulator - PC: {proc.RegisterFile[(int)ProcessorUnprotected.Register.R_PC]:X4} ({proc.MemoryRead(proc.RegisterFile[(int)ProcessorUnprotected.Register.R_PC]):X4})";
                     proc.Step();
-                    Thread.Sleep(250);
-                    
-                } catch(Exception ex) {
-                    Debug.WriteLine(ex);
-                    continue;
+                    Thread.Sleep(200);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Exception: {ex}");
+                    break;
                 }
             }
+            //proc.Run();
+            Console.Read();
         }
     }
 }

@@ -2,7 +2,13 @@
 
 namespace LC3.Emulation.Core
 {
-    public class Processor
+    /// <summary>
+    /// Creates a LittleComputer-3 processor with NO protection/interrupt handling.
+    /// </summary>
+    /// <remarks>
+    /// The CPU doesn't have any direct connection to the outside world, but you can use the I/O stack and events.
+    /// </remarks>
+    public class ProcessorUnprotected
     {
         public const int CPU_OUTPUT_CHARACTER = 0;
         public const int CPU_OUTPUT_STRING = 1;
@@ -10,14 +16,9 @@ namespace LC3.Emulation.Core
 
         public const int CPU_INPUT_CHARACTER = 0;
 
-        public Processor(ushort ProgramCouterStart = 0x3000)
+        public ProcessorUnprotected(ushort ProgramCouterStart = 0x3000)
         {
             RegisterFile[(int)Register.R_PC] = ProgramCouterStart; // Default starting address for the program counter
-            
-            for (int i = 0; i < memory.Length; i++)
-            {
-                MemoryWrite((ushort)i, (ushort) Random.Shared.Next(0, ushort.MaxValue));
-            }
         }
 
 
@@ -38,6 +39,7 @@ namespace LC3.Emulation.Core
             R_R2,
             R_R3,
             R_R4,
+            R_R5,
             R_R6,
             R_R7,
             R_PC,
@@ -87,28 +89,25 @@ namespace LC3.Emulation.Core
         };
 
 
-        ushort r0, r1, r2, imm5, pcOffset9, condFlag, loadRegisterOffset;
+        ushort _OpCodeFirstRegister, _OpCodeSecondRegister, _OpCodeThirdRegister, _Immediate5Bit, _PCOffset9Bit, _ConditionalFlag, _LoadRegisterOffset;
         // HACKHACK: condFlag SHOULD be a bool, but i want to use against a int, so it'll become an ushort
-        bool immFlag, longFlag;
+        bool _ImmediateFlag, _LongFlag;
         public void Step()
         {
-            RegisterFile[(int)Register.R_COND] = (ushort)Flags.FL_ZRO;
-
-
             ushort instruction = MemoryRead(RegisterFile[(int)Register.R_PC]++);
 
             ushort opcode = (ushort)(instruction >> 12);
             
 
-            r0 = (ushort)((instruction >> 9) & 0x7);
-            r1 = (ushort)((instruction >> 6) & 0x7);
-            r2 = (ushort)(instruction & 0x7);
-            imm5 = _signExtend((ushort)(instruction & 0x1F), 5);
-            pcOffset9 = _signExtend((ushort)(instruction & 0x1FF), 9);
-            immFlag = ((instruction >> 5) & 0x1) == 1;
-            condFlag = (ushort)((instruction >> 9) & 0x7);
-            longFlag = ((instruction >> 11) & 0x1) == 1;
-            loadRegisterOffset = _signExtend((ushort)(instruction & 0x3F), 6);
+            _OpCodeFirstRegister = (ushort)((instruction >> 9) & 0x7);
+            _OpCodeSecondRegister = (ushort)((instruction >> 6) & 0x7);
+            _OpCodeThirdRegister = (ushort)(instruction & 0x7);
+            _Immediate5Bit = _signExtend((ushort)(instruction & 0x1F), 5);
+            _PCOffset9Bit = _signExtend((ushort)(instruction & 0x1FF), 9);
+            _ImmediateFlag = ((instruction >> 5) & 0x1) == 1;
+            _ConditionalFlag = (ushort)((instruction >> 9) & 0x7);
+            _LongFlag = ((instruction >> 11) & 0x1) == 1;
+            _LoadRegisterOffset = _signExtend((ushort)(instruction & 0x3F), 6);
 
             //OnDebugInfo?.Invoke($"[DEBUG] Executing instruction at address: 0x{RegisterFile[(int)Register.R_PC]:X4}, Instruction: 0x{memory[RegisterFile[(int)Register.R_PC]]:X4}");
             //OnDebugInfo?.Invoke($"[DEBUG] Decoded instruction - Opcode: {(OpCode)opcode}");
@@ -116,40 +115,40 @@ namespace LC3.Emulation.Core
             switch (opcode)
             {
                 case (ushort)OpCode.OP_BR:
-                    if ((condFlag & RegisterFile[(int)Register.R_COND]) == 1)
+                    if ((_ConditionalFlag & RegisterFile[(int)Register.R_COND]) != 0)
                     {
-                        RegisterFile[(int)Register.R_PC] += pcOffset9;
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_BR, branching to address: 0x{RegisterFile[(int)Register.R_PC]:X4} with offset {pcOffset9}");
+                        RegisterFile[(int)Register.R_PC] += _PCOffset9Bit;
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_BR, branching to address: 0x{RegisterFile[(int)Register.R_PC]:X4} with offset {_PCOffset9Bit}");
                     }
                     break;
 
                 case (ushort)OpCode.OP_ADD:
-                    if (immFlag)
+                    if (_ImmediateFlag)
                     {
-                        RegisterFile[r0] = (ushort)(RegisterFile[r1] + imm5);
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_ADD with immediate value: R{r0} = R{r1} + {imm5} => 0x{RegisterFile[r0]:X4}");
+                        RegisterFile[_OpCodeFirstRegister] = (ushort)(RegisterFile[_OpCodeSecondRegister] + _Immediate5Bit);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_ADD with immediate value: R{_OpCodeFirstRegister} = R{_OpCodeSecondRegister} + {_Immediate5Bit} => 0x{RegisterFile[_OpCodeFirstRegister]:X4}");
                     }
                     else
                     {
-                        RegisterFile[r0] = (ushort)(RegisterFile[r1] + RegisterFile[r2]);
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_ADD with register value: R{r0} = R{r1} + R{r2} => 0x{RegisterFile[r0]:X4}");
+                        RegisterFile[_OpCodeFirstRegister] = (ushort)(RegisterFile[_OpCodeSecondRegister] + RegisterFile[_OpCodeThirdRegister]);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_ADD with register value: R{_OpCodeFirstRegister} = R{_OpCodeSecondRegister} + R{_OpCodeThirdRegister} => 0x{RegisterFile[_OpCodeFirstRegister]:X4}");
                     }
 
-                    _updateFlags(r0);
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_LD:
-                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9));
-                    _updateFlags(r0);
+                    RegisterFile[_OpCodeFirstRegister] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + _PCOffset9Bit));
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_ST:
-                    MemoryWrite((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9), RegisterFile[r0]);
+                    MemoryWrite((ushort)(RegisterFile[(int)Register.R_PC] + _PCOffset9Bit), RegisterFile[_OpCodeFirstRegister]);
                     break;
 
                 case (ushort)OpCode.OP_JSR:
                     RegisterFile[(int)Register.R_R7] = RegisterFile[(int)Register.R_PC];
-                    if (longFlag)
+                    if (_LongFlag)
                     {
                         //because longPCOffset is only used here, i will NOT put it at the start of the function
                         ushort longPCOffset = _signExtend((ushort)(instruction & 0x7FF), 11);
@@ -158,57 +157,56 @@ namespace LC3.Emulation.Core
                     }
                     else // Appently JSRR here
                     {
-                        RegisterFile[(int)Register.R_PC] = RegisterFile[r1];
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JSR with register value: Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)r1}");
+                        RegisterFile[(int)Register.R_PC] = RegisterFile[_OpCodeSecondRegister];
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JSR with register value: Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)_OpCodeSecondRegister}");
                     }
                     break;
 
                 case (ushort)OpCode.OP_AND:
-                    if (immFlag)
+                    if (_ImmediateFlag)
                     {
-                        RegisterFile[r0] = (ushort)(RegisterFile[r1] & imm5);
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with immediate value: {(Register)r0} = {(Register)r1} & {imm5} => 0x{RegisterFile[r0]:X4}");
+                        RegisterFile[_OpCodeFirstRegister] = (ushort)(RegisterFile[_OpCodeSecondRegister] & _Immediate5Bit);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with immediate value: {(Register)_OpCodeFirstRegister} = {(Register)_OpCodeSecondRegister} & {_Immediate5Bit} => 0x{RegisterFile[_OpCodeFirstRegister]:X4}");
                     }
                     else
                     {
-                        RegisterFile[r0] = (ushort)(RegisterFile[r1] & RegisterFile[r2]);
-                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with register value: {(Register)r0} = {(Register)r1} & {(Register)r2} => 0x{RegisterFile[r0]:X4}");
+                        RegisterFile[_OpCodeFirstRegister] = (ushort)(RegisterFile[_OpCodeSecondRegister] & RegisterFile[_OpCodeThirdRegister]);
+                        OnDebugInfo?.Invoke($"[DEBUG] Executed OP_AND with register value: {(Register)_OpCodeFirstRegister} = {(Register)_OpCodeSecondRegister} & {(Register)_OpCodeThirdRegister} => 0x{RegisterFile[_OpCodeFirstRegister]:X4}");
                     }
-                    _updateFlags(r0);
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_LDR:
-                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[r1] + loadRegisterOffset));
-                    _updateFlags(r0);
+                    RegisterFile[_OpCodeFirstRegister] = MemoryRead((ushort)(RegisterFile[_OpCodeSecondRegister] + _LoadRegisterOffset));
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_STR:
-                    MemoryWrite(MemoryRead((ushort)(RegisterFile[r1] + loadRegisterOffset)), RegisterFile[r0]);
+                    MemoryWrite(MemoryRead((ushort)(RegisterFile[_OpCodeSecondRegister] + _LoadRegisterOffset)), RegisterFile[_OpCodeFirstRegister]);
                     break;
 
                 case (ushort)OpCode.OP_RTI:
-                    throw new NotImplementedException($"please fix: {nameof(opcode)} got an yet-to-be implemented: OpCode.{(OpCode)opcode}");
-                    break;
+                    throw new InvalidLC3ProgramException("The program tried to execute a ReTurn from Interrupt from a non-protected CPU!", this);
 
                 case (ushort)OpCode.OP_NOT:
-                    RegisterFile[r0] = (ushort)~RegisterFile[r1];
-                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_NOT, on Register {(Register)r0}, with Register {(Register)r1}");
-                    _updateFlags(r0);
+                    RegisterFile[_OpCodeFirstRegister] = (ushort)~RegisterFile[_OpCodeSecondRegister];
+                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_NOT, on Register {(Register)_OpCodeFirstRegister}, with Register {(Register)_OpCodeSecondRegister}");
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_LDI:
-                    RegisterFile[r0] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9));
-                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)r0}, with offset of {pcOffset9}");
-                    _updateFlags(r0);
+                    RegisterFile[_OpCodeFirstRegister] = MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + _PCOffset9Bit));
+                    OnDebugInfo?.Invoke($"[DEBUG] Executing OP_LDI, on Register {(Register)_OpCodeFirstRegister}, with offset of {_PCOffset9Bit}");
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_STI:
-                    MemoryWrite(MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9)), RegisterFile[r0]);
+                    MemoryWrite(MemoryRead((ushort)(RegisterFile[(int)Register.R_PC] + _PCOffset9Bit)), RegisterFile[_OpCodeFirstRegister]);
                     break;
 
                 case (ushort)OpCode.OP_JMP: // Also RET????
-                    RegisterFile[(int)Register.R_PC] = RegisterFile[r1];
-                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JMP, Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)r1}");
+                    RegisterFile[(int)Register.R_PC] = RegisterFile[_OpCodeSecondRegister];
+                    OnDebugInfo?.Invoke($"[DEBUG] Executed OP_JMP, Jumping to address: 0x{RegisterFile[(int)Register.R_PC]:X4} from Register {(Register)_OpCodeSecondRegister}");
                     break;
 
                 case (ushort)OpCode.OP_RES:
@@ -216,8 +214,8 @@ namespace LC3.Emulation.Core
                     break;
 
                 case (ushort)OpCode.OP_LEA:
-                    RegisterFile[r0] = (ushort)(RegisterFile[(int)Register.R_PC] + pcOffset9);
-                    _updateFlags(r0);
+                    RegisterFile[_OpCodeFirstRegister] = (ushort)(RegisterFile[(int)Register.R_PC] + _PCOffset9Bit);
+                    _updateFlags(_OpCodeFirstRegister);
                     break;
 
                 case (ushort)OpCode.OP_TRAP:
@@ -251,10 +249,10 @@ namespace LC3.Emulation.Core
                     break;
                 case TrapCode.TRAP_OUT:
                     OnCPUOutput?.Invoke(CPU_OUTPUT_CHARACTER);
-                    outputStack.Push((char)(RegisterFile[r0]));
+                    outputStack.Push((char)(RegisterFile[_OpCodeFirstRegister]));
                     break;
                 case TrapCode.TRAP_PUTS:
-                    ushort address = RegisterFile[r0];
+                    ushort address = RegisterFile[_OpCodeFirstRegister];
                     while (MemoryRead(address) != 0)
                     {
                         char c = (char)(MemoryRead(address) & 0xFF);
@@ -279,7 +277,7 @@ namespace LC3.Emulation.Core
                     _updateFlags(0);
                     break;
                 case TrapCode.TRAP_PUTSP:
-                    address = RegisterFile[r0];
+                    address = RegisterFile[_OpCodeFirstRegister];
                     while(MemoryRead(address) != 0)
                     {
                         char c1, c2;
@@ -310,13 +308,37 @@ namespace LC3.Emulation.Core
         }
 
         public bool LoadImage(string path) {
-            if (!File.Exists(path))
-            {
-                OnDebugInfo?.Invoke($"[FILE] Image path does not exist: {path}");
-                return false;
-            }
-
             return false;
+            //if (!File.Exists(path))
+            //{
+            //    OnDebugInfo?.Invoke($"[FILE] Image path does not exist: {path}");
+            //    return false;
+            //}
+            //else
+            //{
+            //    ushort origin = 0;
+            //    OnDebugInfo?.Invoke($"Reading file {path}...");
+            //    var fileFS = File.OpenRead(path);
+            //    var fileBR = new BinaryReader(fileFS);
+            //    origin = _swapEndianess(fileBR.ReadUInt16());
+            //    ushort[] tempFile = new ushort[(fileFS.Length - 2) / 2];
+            //    int i = 0;
+
+            //    while (fileFS.Position <= (fileFS.Length - 2))
+            //    {
+            //        ushort word = fileBR.ReadUInt16(); //_swapEndianess(fileBR.ReadUInt16());
+            //        MemoryWrite((ushort)(origin + i), word);
+            //        tempFile[i] = word;
+            //        i++;
+            //    }
+            //    File.WriteAllBytes($"{path}.read.bin", tempFile.SelectMany(BitConverter.GetBytes).ToArray());
+            //    return true;
+            //}
+        }
+
+        private ushort _swapEndianess(ushort value)
+        {
+            return (ushort)((value << 8) | (value >> 8));
         }
 
         private ushort _signExtend(ushort value, int bitCount)
@@ -340,6 +362,24 @@ namespace LC3.Emulation.Core
             else
             {
                 RegisterFile[(int)Register.R_COND] = (ushort)Flags.FL_POS;
+            }
+        }
+
+        public void Run(bool alsoReset = false)
+        {
+            if (alsoReset)
+            {
+                RegisterFile[(int)Register.R_PC] = 0x3000; // Reset to default starting address
+                for (int i = 0; i < RegisterFile.Length; i++)
+                {
+                    RegisterFile[i] = 0;
+                }
+            }
+            RegisterFile[(int)Register.R_COND] = (ushort)Flags.FL_ZRO; 
+            Running = true;
+            while (Running)
+            {
+                Step();
             }
         }
     }
