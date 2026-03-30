@@ -19,6 +19,10 @@ namespace LC3.Emulation.Core
         public ProcessorUnprotected(ushort ProgramCouterStart = 0x3000)
         {
             RegisterFile[(int)Register.R_PC] = ProgramCouterStart; // Default starting address for the program counter
+            for (int i = 0; i < memory.Length; i++)
+            {
+                MemoryWrite((ushort)i, (ushort)Random.Shared.Next(ushort.MaxValue));
+            } 
         }
 
 
@@ -80,7 +84,6 @@ namespace LC3.Emulation.Core
             OP_TRAP    /* execute trap */
         };
 
-        [Flags]
         public enum Flags
         {
             FL_POS = 1 << 0, /* P */
