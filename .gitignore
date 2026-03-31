@@ -3,6 +3,10 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Little-Computer 3 Specific .gitignore stuff
+LC3ASM/*.*
+
+
 # User-specific files
 *.rsuser
 *.suo

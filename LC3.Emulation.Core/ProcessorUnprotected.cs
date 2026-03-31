@@ -19,10 +19,14 @@ namespace LC3.Emulation.Core
         public ProcessorUnprotected(ushort ProgramCouterStart = 0x3000)
         {
             RegisterFile[(int)Register.R_PC] = ProgramCouterStart; // Default starting address for the program counter
-            for (int i = 0; i < memory.Length; i++)
-            {
-                MemoryWrite((ushort)i, (ushort)Random.Shared.Next(ushort.MaxValue));
-            } 
+            MemoryWrite(0x3000, 0b0001000000100001);
+            MemoryWrite(0x3001, 0b0001001001100001);
+            MemoryWrite(0x3002, 0b0001010010100001);
+            MemoryWrite(0x3003, 0b0001011011100001);
+            MemoryWrite(0x3004, 0b0001100100100001);
+            MemoryWrite(0x3005, 0b0001101101100001);
+            MemoryWrite(0x3006, 0b0001110110100001);
+            MemoryWrite(0x3007, 0b1111000000100101);
         }
 
 
@@ -233,6 +237,10 @@ namespace LC3.Emulation.Core
 
         private void _handleTrapCode(TrapCode trapCode)
         {
+            if (!DoTrapInCSharp)
+            {
+                return;
+            }
             switch (trapCode)
             {
                 case TrapCode.TRAP_GETC:
